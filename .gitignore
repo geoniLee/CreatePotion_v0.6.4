@@ -28,7 +28,7 @@ Saved/
 
 # Local Codex / agent files
 **/AGENTS.md
-**/.codex-local/
+**/codex-local/
 
 # JetBrains Rider Settings
 *.DotSettings
