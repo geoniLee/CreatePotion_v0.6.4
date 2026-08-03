@@ -22,3 +22,14 @@ Saved/
 # Visual Studio cache
 .vs/
 *.ipch
+
+# Local dev files
+[Dd]ev/
+
+# Local Codex / agent files
+**/AGENTS.md
+**/.codex-local/
+
+# JetBrains Rider Settings
+*.DotSettings
+*.DotSettings.user
