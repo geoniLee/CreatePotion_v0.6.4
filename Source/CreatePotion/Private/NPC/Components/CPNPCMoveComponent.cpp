@@ -1,4 +1,4 @@
-﻿#include "NPC/CPNPCMoveComponent.h"
+﻿#include "NPC/Components/CPNPCMoveComponent.h"
 #include "NPC/CPBaseNPC.h"
 #include "Data/NPC/CPNPCDataAsset.h"
 #include "NavigationSystem.h"
@@ -6,6 +6,9 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemInterface.h"
+#include "NavigationSystem.h"
 
 DEFINE_LOG_CATEGORY(LogCPNPC);
 
@@ -57,6 +60,16 @@ void UCPNPCMoveComponent::BeginPlay()
 	}
 
 	StartMoving();
+
+	if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(GetOwner()))
+	{
+		if (UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent())
+		{
+			FGameplayTag DisplaceTag = FGameplayTag::RequestGameplayTag(FName("State.NPC.Displaced"));
+			ASC->RegisterGameplayTagEvent(DisplaceTag, EGameplayTagEventType::NewOrRemoved)
+				.AddUObject(this, &UCPNPCMoveComponent::OnDisplacementTagChanged);
+		}
+	}
 }
 
 void UCPNPCMoveComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -141,10 +154,22 @@ void UCPNPCMoveComponent::RestoreMovementState(const FCPNPCMovementSaveData& Sav
 
 	FVector TargetLocation = SaveData.SavedLocation;
 
-	if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
+	if (UWorld* World = GetWorld())
 	{
-		MoveComp->UpdateComponentVelocity();
-		MoveComp->FindFloor(OwnerCharacter->GetActorLocation(), MoveComp->CurrentFloor, false);
+		UCapsuleComponent* Capsule = OwnerCharacter->GetCapsuleComponent();
+		const float CapsuleHalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 88.0f;
+
+		FHitResult GroundHit;
+		const FVector TraceStart = TargetLocation + FVector(0.f, 0.f, 300.f);
+		const FVector TraceEnd = TargetLocation - FVector(0.f, 0.f, 1500.f);
+
+		FCollisionQueryParams QueryParams;
+		QueryParams.AddIgnoredActor(OwnerCharacter);
+
+		if (World->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
+		{
+			TargetLocation.Z = GroundHit.ImpactPoint.Z + CapsuleHalfHeight;
+		}
 	}
 
 	OwnerCharacter->SetActorLocationAndRotation(
@@ -155,12 +180,89 @@ void UCPNPCMoveComponent::RestoreMovementState(const FCPNPCMovementSaveData& Sav
 		ETeleportType::TeleportPhysics
 	);
 
+	if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
+	{
+		MoveComp->UpdateComponentVelocity();
+		MoveComp->SetMovementMode(MOVE_Walking);
+		MoveComp->FindFloor(OwnerCharacter->GetActorLocation(), MoveComp->CurrentFloor, false);
+		MoveComp->AdjustFloorHeight();
+	}
+
 	CurrentPointIndex = SaveData.NextPointIndex;
 
 	/*UE_LOG(LogCPNPC, Log, TEXT("[NPC 위치 복원] 액터: [%s] | 복원된 좌표: %s | 이어서 갈 인덱스: %d"),
 		*GetNameSafe(OwnerCharacter),
 		*SaveData.SavedLocation.ToCompactString(),
 		CurrentPointIndex);*/
+}
+
+void UCPNPCMoveComponent::OnDisplacementTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
+{
+	if (NewCount == 1)
+	{
+		if (AActor* OwnerActor = GetOwner())
+		{
+			PreDisplaceLocation = OwnerActor->GetActorLocation();
+			PreDisplaceRotation = OwnerActor->GetActorRotation();
+		}
+
+		bWasMovingBeforeDisplace = (bIsMoving || (GetWorld() && GetWorld()->GetTimerManager().IsTimerActive(MoveWaitTimerHandle))) && !bIsMovePaused;
+
+		if (GetWorld())
+		{
+			GetWorld()->GetTimerManager().ClearTimer(MoveWaitTimerHandle);
+		}
+		if (AIController)
+		{
+			AIController->StopMovement();
+		}
+		bIsMoving = false;
+	}
+
+	else if (NewCount == 0)
+	{
+		RespawnToPreDisplaceState();
+	}
+}
+
+void UCPNPCMoveComponent::RespawnToPreDisplaceState()
+{
+	ACharacter* OwnerChar = Cast<ACharacter>(GetOwner());
+	if (!OwnerChar)
+	{
+		return;
+	}
+
+	FVector SafeTargetLocation = FindValidNavLocation(PreDisplaceLocation);
+
+	if (UCapsuleComponent* Capsule = OwnerChar->GetCapsuleComponent())
+	{
+		SafeTargetLocation.Z += Capsule->GetScaledCapsuleHalfHeight();
+	}
+	OwnerChar->SetActorLocationAndRotation(
+		SafeTargetLocation,
+		FRotator(0.f, PreDisplaceRotation.Yaw, 0.f),
+		false,
+		nullptr,
+		ETeleportType::TeleportPhysics
+	);
+
+	if (UCharacterMovementComponent* MoveComp = OwnerChar->GetCharacterMovement())
+	{
+		MoveComp->StopMovementImmediately();
+		MoveComp->SetMovementMode(MOVE_Walking);
+		MoveComp->FindFloor(OwnerChar->GetActorLocation(), MoveComp->CurrentFloor, false);
+		MoveComp->AdjustFloorHeight();
+	}
+	if (bWasMovingBeforeDisplace)
+	{
+		bIsMovePaused = false;
+		MoveToCurrentIndex();
+	}
+	else
+	{
+		StopMoving();
+	}
 }
 
 void UCPNPCMoveComponent::SaveMovementState()
@@ -266,20 +368,20 @@ void UCPNPCMoveComponent::MoveToCurrentIndex()
 
 	bIsMoving = true;
 
-	/*if (AActor* OwnerActor = GetOwner())
+	if (AActor* OwnerActor = GetOwner())
 	{
 		const FVector CurrentLoc = OwnerActor->GetActorLocation();
 		const float Dist3D = FVector::Dist(CurrentLoc, Destination);
 		const float Dist2D = FVector::Dist2D(CurrentLoc, Destination);
 
-		UE_LOG(LogCPNPC, Error, TEXT("[%s] [이동 시도] 목표: %s | 현재위치: %s | 3D거리: %.1f | 2D거리: %.1f | AcceptanceRadius: %.1f"),
+		/*UE_LOG(LogCPNPC, Error, TEXT("[%s] [이동 시도] 목표: %s | 현재위치: %s | 3D거리: %.1f | 2D거리: %.1f | AcceptanceRadius: %.1f"),
 			*GetNameSafe(OwnerActor),
 			*Destination.ToString(),
 			*CurrentLoc.ToString(),
 			Dist3D,
 			Dist2D,
-			AcceptanceRadius);
-	}*/
+			AcceptanceRadius);*/
+	}
 
 	EPathFollowingRequestResult::Type MoveResult = AIController->MoveToLocation(
 		Destination,
@@ -330,7 +432,7 @@ void UCPNPCMoveComponent::OnMoveCompleted(FAIRequestID RequestID, EPathFollowing
 		WaitTime = TargetPoints[CurrentPointIndex].WaitSeconds;
 		ArrivedLocation = TargetPoints[CurrentPointIndex].Point;
 	}
-	//UE_LOG(LogCPNPC, Log, TEXT("[%s] 도착 좌표: %s | 대기 시간: %.2f | 현재 인덱스: %d"),*GetNameSafe(GetOwner()), *ArrivedLocation.ToString(), WaitTime, CurrentPointIndex);
+	UE_LOG(LogCPNPC, Log, TEXT("[%s] 도착 좌표: %s | 대기 시간: %.2f | 현재 인덱스: %d"),*GetNameSafe(GetOwner()), *ArrivedLocation.ToString(), WaitTime, CurrentPointIndex);
 
 	if (Result == EPathFollowingResult::Success)
 	{
@@ -405,4 +507,17 @@ FName UCPNPCMoveComponent::GetMovementStorageKey() const
 
 	FString LevelName = GetCurrentLevelIdentifier();
 	return FName(*FString::Printf(TEXT("%s_%s"), *BaseNPC->GetPotionNPCId().ToString(), *LevelName));
+}
+
+FVector UCPNPCMoveComponent::FindValidNavLocation(const FVector& InLocation) const
+{
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
+	{
+		FNavLocation ProjectedLocation;
+		if (NavSys->ProjectPointToNavigation(InLocation, ProjectedLocation, FVector(500.f, 500.f, 800.f)))
+		{
+			return ProjectedLocation.Location;
+		}
+	}
+	return InLocation;
 }
