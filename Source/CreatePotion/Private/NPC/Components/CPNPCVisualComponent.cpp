@@ -1,9 +1,11 @@
-﻿#include "NPC/CPNPCVisualComponent.h"
+﻿#include "NPC/Components/CPNPCVisualComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
+#include "NPC/CPBaseNPC.h"
+#include "Components/WidgetComponent.h"
 
 UCPNPCVisualComponent::UCPNPCVisualComponent()
 {
@@ -11,11 +13,13 @@ UCPNPCVisualComponent::UCPNPCVisualComponent()
 }
 
 void UCPNPCVisualComponent::InitializeVisual(USkeletalMeshComponent* InMeshComp, UCapsuleComponent* InCapsuleComp,
-	USkeletalMesh* DefaultMesh, UAnimSequence* DefaultAnim, const FVector& BaseScale, float CapsuleRadiusRatio)
+	USkeletalMesh* DefaultMesh, TSubclassOf<UAnimInstance> InAnimClass, UAnimSequence* DefaultAnim,
+	const FVector& BaseScale, float CapsuleRadiusRatio)
 {
 	MeshComponent = InMeshComp;
 	CapsuleComponent = InCapsuleComp;
-	DefaultOriginalMesh = DefaultMesh;
+	DefaultOriginalMesh = DefaultMesh; 
+	DefaultAnimClass = InAnimClass;
 	DefaultOriginalAnim = DefaultAnim;
 	BaseMeshScale = BaseScale;
 	StoredCapsuleRadiusRatio = CapsuleRadiusRatio;
@@ -34,7 +38,12 @@ void UCPNPCVisualComponent::InitializeVisual(USkeletalMeshComponent* InMeshComp,
 			DefaultOriginalMaterials.Add(i, MeshComponent->GetMaterial(i));
 		}
 
-		if (DefaultOriginalAnim)
+		if (DefaultAnimClass)
+		{
+			MeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+			MeshComponent->SetAnimInstanceClass(DefaultAnimClass);
+		}
+		else if (DefaultOriginalAnim)
 		{
 			MeshComponent->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			MeshComponent->PlayAnimation(DefaultOriginalAnim, true);
@@ -128,11 +137,10 @@ FVector UCPNPCVisualComponent::GetCurrentBaseScale() const
 
 void UCPNPCVisualComponent::FitCapsuleToCurrentMesh()
 {
-	if (!MeshComponent.IsValid() || !CapsuleComponent.IsValid()) return;
+	if (!MeshComponent.IsValid() || !CapsuleComponent.IsValid()) { return; }
 	USkeletalMesh* CurrentMesh = MeshComponent->GetSkeletalMeshAsset();
-	if (!CurrentMesh) return;
+	if (!CurrentMesh) { return; }
 
-	// 1. 크기 변경 전 현재 캡슐의 ScaledHalfHeight 기록
 	const float OldHalfHeight = CapsuleComponent->GetScaledCapsuleHalfHeight();
 
 	float TargetRadius = -1.0f;
@@ -178,6 +186,11 @@ void UCPNPCVisualComponent::FitCapsuleToCurrentMesh()
 	}
 
 	CapsuleComponent->SetCapsuleSize(FinalRadius, FinalHalfHeight, true);
+
+	if (ACPBaseNPC* BaseNPC = Cast<ACPBaseNPC>(GetOwner()))
+	{
+		BaseNPC->UpdateOverheadWidgetsScale(CurrentScaleMultiplier);
+	}
 
 	static const FGameplayTag SlimeTag = FGameplayTag::RequestGameplayTag(FName("State.Effect.Slime"));
 	const bool bIsSlime = MeshOverrideStack.ContainsByPredicate([&](const FMeshOverrideEntry& E) {
@@ -238,10 +251,6 @@ void UCPNPCVisualComponent::RestoreMeshTransformAfterRagdoll()
 	MeshComponent->RecreatePhysicsState();
 
 	float ExpectedHalfHeight = CapsuleComponent->GetScaledCapsuleHalfHeight();
-	if (MeshOverrideStack.Num() > 0 && MeshOverrideStack.Last().OverrideCapsuleHalfHeight > 0.0f)
-	{
-		ExpectedHalfHeight = MeshOverrideStack.Last().OverrideCapsuleHalfHeight;
-	}
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
@@ -298,7 +307,12 @@ void UCPNPCVisualComponent::ApplyTopMesh()
 		MeshComponent->SetBoundsScale(3.0f);
 		MeshComponent->SetRelativeRotation(bIsOverridden ? FRotator::ZeroRotator : DefaultOriginalRotation);
 
-		if (TargetAnim)
+		if (DefaultAnimClass)
+		{
+			MeshComponent->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+			MeshComponent->SetAnimInstanceClass(DefaultAnimClass);
+		}
+		else if (TargetAnim)
 		{
 			MeshComponent->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			MeshComponent->PlayAnimation(TargetAnim, true);
