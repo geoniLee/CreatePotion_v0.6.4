@@ -12,6 +12,21 @@
 
 ---
 
+## 저장소 안내
+
+> [!IMPORTANT]
+> 이 저장소는 포트폴리오 코드 열람을 목적으로 공개된 저장소입니다.
+
+포트폴리오 공개 범위를 조정하고 저장소 용량을 정리하기 위해 다음 경로는 현재 브랜치뿐만 아니라 Git 히스토리 전체에서 제거했습니다.
+
+- `Plugins/`
+- `Content/CreatePotion/Assets/`
+
+따라서 이 저장소를 Clone하더라도 필요한 에셋과 플러그인이 없어 Unreal Editor에서 프로젝트를 정상적으로 빌드하거나 실행할 수 없습니다.
+프로젝트의 구조와 C++ 구현은 `Source/CreatePotion`에서 확인할 수 있으며, 실제 실행 결과는 패키징 빌드와 플레이 영상을 통해 확인할 수 있습니다.
+
+---
+
 ## 게임 진행
 
 플레이어는 필드에서 재료를 발견하고 채집해 도감을 채웁니다.
@@ -21,8 +36,6 @@
 ---
 
 ## 개인 기여
-
-아래 내용은 Git 작성자 `geoniLee`, `geoni-ara`의 커밋과 현재 코드를 기준으로 정리했습니다.
 
 ### 1. 채집물 데이터 · 도감 시스템
 
@@ -153,14 +166,18 @@ Quest와 NPC 시스템 전체를 구현한 것이 아니라,
 
 ## Build / Play
 
-### Source Project
+### Source Code
 
-이 저장소의 `CreatePotion.uproject`는 Unreal Engine 5.8 프로젝트입니다.
-C++ 소스코드는 `Source/CreatePotion`에서 확인할 수 있습니다.
+이 저장소에는 Unreal Engine 5.8 프로젝트의 C++ 소스코드가 포함되어 있습니다.
+
+포트폴리오 공개 범위에서 제외된 에셋과 플러그인이 제거되어 있으므로, Clone한 프로젝트는 Unreal Editor에서 정상적으로 빌드하거나 실행할 수 없습니다.
+이 저장소는 실행 가능한 전체 프로젝트 배포본이 아니라 코드와 구현 구조를 확인하기 위한 포트폴리오 저장소입니다.
+
+주요 C++ 소스코드는 `Source/CreatePotion`에서 확인할 수 있습니다.
 
 ### Packaged Build
 
-[**Create Potion v0.6.4-beta 다운로드**](https://drive.google.com/file/d/1rq6BZ-FbZ2OYr345ob4vFyU3ls3QBtkA/view?usp=sharing)
+[**Create Potion v0.6.4-beta 다운로드**](https://github.com/geoniLee/CreatePotion_v0.6.4/releases/tag/v0.6.4-beta)
 
 ### Play Video
 
