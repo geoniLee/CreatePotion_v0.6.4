@@ -8,7 +8,7 @@
 - **Engine:** Unreal Engine 5.8
 - **Language:** C++ / Blueprint
 - **Play Video:** [Google Drive](https://drive.google.com/file/d/1wYYHEF186lLVIjGBgIATkxz-wvopihos/view?usp=sharing)
-- **Packaged Build:** [Google Drive - v0.6.4-beta](https://drive.google.com/file/d/1rq6BZ-FbZ2OYr345ob4vFyU3ls3QBtkA/view?usp=sharing)
+- **Packaged Build:** [**Create Potion v0.6.4-beta Release**](https://github.com/geoniLee/CreatePotion_v0.6.4/releases/tag/v0.6.4-beta)
 
 ---
 
@@ -177,11 +177,3 @@ Quest와 NPC 시스템 전체를 구현한 것이 아니라,
 이 저장소는 실행 가능한 전체 프로젝트 배포본이 아니라 코드와 구현 구조를 확인하기 위한 포트폴리오 저장소입니다.
 
 주요 C++ 소스코드는 `Source/CreatePotion`에서 확인할 수 있습니다.
-
-### Packaged Build
-
-[**Create Potion v0.6.4-beta 다운로드**](https://github.com/geoniLee/CreatePotion_v0.6.4/releases/tag/v0.6.4-beta)
-
-### Play Video
-
-[**Create Potion 플레이 영상**](https://drive.google.com/file/d/1wYYHEF186lLVIjGBgIATkxz-wvopihos/view?usp=sharing)
